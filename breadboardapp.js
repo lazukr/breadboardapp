@@ -9,10 +9,12 @@
 
 
 // colors
-const BEIGE = "#F5D3B3";
-const RED = "#FF0000";
-const BLUE = "#0000FF";
-const GREEN = "#006D00";
+const BEIGE = "#f5d3b3";
+const RED = "#f7786b";
+const BLUE = "#92a8d1";
+const GREEN = "#b1cbbb";
+const DARK_GREY = "#808080";
+const ORANGE = "#ff8c00";
 
 // board dimensions
 const WIDTH = 132;
@@ -74,6 +76,8 @@ const BUS_STRIPS_POS = {
     blue: [{x: 5, y:7}, {x: 5, y:34}]
 };
 
+const PIN_ID = "PIN";
+
 
 function main() {
 
@@ -86,13 +90,86 @@ function main() {
 
 }
 
+function test() {
+    console.log("hi");
+
+}
+
+class Wire {
+    constructor(config) {
+        this.stage = config.stage;
+        this.color = config.color;
+        this.x = config.x;
+        this.y = config.y;
+        this.pins = [];
+        this.pins.push(config.startingPin);
+        this.display = null;
+        this.mouseMoveEvent = null;
+        this.mouseUpEvent = null;
+        this.initWire();
+    }
+
+    initWire() {
+
+        this.display = new createjs.Shape().set({
+            x: this.x,
+            y: this.y,
+            mouseEnabled: false,
+            graphics: new createjs.Graphics().beginStroke(this.color).drawCircle(0, 0, 50)
+        });
+        this.stage.addChild(this.display);
+        this.mouseMoveEvent = this.stage.on("stagemousemove", this.drawLine, this);
+        this.mouseUpEvent = this.stage.on("stagemouseup", this.endDraw, this);
+    }
+
+    drawLine(e) {
+        this.display.graphics.clear()
+            .setStrokeStyle(0.6*SQUARE_SIZE)
+            .beginStroke(this.color)
+            .moveTo(0,0)
+            .lineTo(this.stage.mouseX-this.display.x, this.stage.mouseY-this.display.y);
+    }
+
+    endDraw(e) {
+        let element, elements = this.stage.getObjectsUnderPoint(this.stage.mouseX, this.stage.mouseY);
+        let i;
+        
+        for (i = 0; i < elements.length; i++) {
+            if ((elements[i].name == PIN_ID) && (!elements[i].isOccupied)) {
+                element = elements[i];
+                break;               
+            }
+        }
+
+        if (element != null) {
+            this.display.graphics.clear()
+                .setStrokeStyle(0.6*SQUARE_SIZE)
+                .beginStroke(this.color)
+                .moveTo(0,0)
+                .lineTo(element.x-this.display.x + 0.5*SQUARE_SIZE, element.y-this.display.y + 0.5*SQUARE_SIZE);
+            this.pins.push(element.pinObject);
+            this.pins.forEach(pin => {
+                pin.isOccupied = true;
+                pin.occupiedObject = this;
+                console.log(pin);   
+            });
+        } else {
+            this.stage.removeChild(this.display);
+            this.pins = [];
+        }
+
+        this.stage.off("stagemousemove", this.mouseMoveEvent);
+        this.stage.off("stagemouseup", this.mouseUpEvent);
+    }
+}
+
 class Pin {
     constructor(config) {
         this.stage = config.stage;
         this.color = config.color;
         this.x = config.x;
         this.y = config.y;
-        this.occupied = false;
+        this.isOccupied = false;
         this.occupiedObject = null;
     }
 
@@ -106,10 +183,32 @@ class Pin {
             x: coord.x,
             y: coord.y,
             cursor: "pointer",
-            name: "pin"
+            name: PIN_ID,
+            pinObject: this
+        });
+
+        const hole = new createjs.Shape().set({
+            x: coord.x + 0.2*SQUARE_SIZE,
+            y: coord.y + 0.2*SQUARE_SIZE
         });
 
         drawSquare(this.stage, this.color, pin);
+        drawSquare(this.stage, DARK_GREY, hole, 0.6);
+        pin.on("mousedown", this.handlePress, this); 
+    }
+
+    handlePress(e) {
+        console.log("this");
+        
+        if (!this.isOccupied) {
+            const wire = new Wire({
+                stage: this.stage,
+                color: ORANGE,
+                x: e.target.x + 0.5*SQUARE_SIZE,
+                y: e.target.y + 0.5*SQUARE_SIZE,
+                startingPin: this
+            });
+        }
     }
 };
 
@@ -276,11 +375,9 @@ class Board {
     }
 };
 
-function drawSquare(stage, color, set={}) {
-    
-    const square = new createjs.Shape().set(set);
+function drawSquare(stage, color, square, sq_scale=1) {
     square.graphics.beginFill(color)
-            .drawRect(0, 0, SQUARE_SIZE, SQUARE_SIZE);
+            .drawRect(0, 0, SQUARE_SIZE*sq_scale, SQUARE_SIZE*sq_scale);
     stage.addChild(square);
 }
 
@@ -292,9 +389,9 @@ function drawRect(stage, pos, size, color) {
 }
 
 function coordToGrid(values) {
-    Object.keys(values).forEach(key =>
+    Object.keys(values).forEach(key => {
         values[key] = values[key]*SQUARE_SIZE
-    );
+    });
 
     return values;
 }
